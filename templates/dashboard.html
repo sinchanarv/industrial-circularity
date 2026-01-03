@@ -1,0 +1,34 @@
+{% extends 'layout.html' %}
+
+{% block body %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Welcome, {{ session['name'] }}!</h1>
+        <span class="badge bg-secondary fs-6">{{ session['role'] }}</span>
+    </div>
+
+    <!-- Logic: If User is a PRODUCER, show the form to Add Waste -->
+    {% if session['role'] == 'Producer' %}
+    <div class="card border-primary mb-4">
+        <div class="card-header bg-primary text-white">➕ Post Industrial Waste</div>
+        <div class="card-body">
+            <p>Have by-products? List them here for recyclers.</p>
+            <a href="/post_material" class="btn btn-primary">Post New Material</a>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Logic: If User is a RECYCLER, show the Market -->
+    {% if session['role'] == 'Recycler' %}
+    <div class="card border-success mb-4">
+        <div class="card-header bg-success text-white">🛒 Material Marketplace</div>
+        <div class="card-body">
+            <p>Browse available waste materials for your industry.</p>
+            <a href="/market" class="btn btn-success">View Marketplace</a>
+        </div>
+    </div>
+    {% endif %}
+
+    <a href="/logout" class="btn btn-danger mt-3">Logout</a>
+</div>
+{% endblock %}
