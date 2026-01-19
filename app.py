@@ -1,42 +1,88 @@
 from flask import Flask, render_template, request, redirect, url_for, session
 from flask_mysqldb import MySQL
 from pymongo import MongoClient
+from web3 import Web3
 import datetime
+import json
+
+# Import the Smart Contract setup
+from blockchain_config import contract_abi, contract_bytecode
 
 app = Flask(__name__)
 
-# SECURITY CONFIGURATION
-# This key is needed to encrypt the session cookies. 
-app.secret_key = 'your_secret_key_here'
+# ============================================
+# 1. SECURITY CONFIGURATION
+# ============================================
+app.secret_key = 'rvce_project_secret_key'
 
-# DATABASE CONFIGURATION
+# ============================================
+# 2. SQL DATABASE CONFIGURATION (XAMPP)
+# ============================================
 app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'root'
 app.config['MYSQL_PASSWORD'] = ''
 app.config['MYSQL_DB'] = 'IndustrialCircularityDB'
 
 mysql = MySQL(app)
-client = MongoClient('mongodb://localhost:27017/')
-mongo_db = client['CircularDB']         # Creates a DB named 'CircularDB'
-impact_collection = mongo_db['ImpactReports'] # Creates a Collection
+
 # ============================================
-# ROUTES
+# 3. MONGODB CONFIGURATION (NoSQL)
+# ============================================
+try:
+    client = MongoClient('mongodb://localhost:27017/')
+    mongo_db = client['CircularDB']
+    impact_collection = mongo_db['ImpactReports']
+    print("✅ Connected to MongoDB")
+except:
+    print("❌ Failed to connect to MongoDB. Is it running?")
+
+# ============================================
+# 4. BLOCKCHAIN CONFIGURATION (Ganache)
+# ============================================
+ganache_url = "http://127.0.0.1:7545" # Check your Ganache App for RPC Server
+web3 = Web3(Web3.HTTPProvider(ganache_url))
+deployed_contract = None
+
+if web3.is_connected():
+    print("✅ Connected to Ganache Blockchain")
+    web3.eth.default_account = web3.eth.accounts[0]
+    
+    # Deploy Contract automatically on startup (Simulation for Project)
+    try:
+        SupplyChain = web3.eth.contract(abi=contract_abi, bytecode=contract_bytecode)
+        tx_hash = SupplyChain.constructor().transact()
+        tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+        contract_address = tx_receipt.contractAddress
+        deployed_contract = web3.eth.contract(address=contract_address, abi=contract_abi)
+        print(f"📜 Smart Contract Deployed at: {contract_address}")
+    except Exception as e:
+        print(f"⚠️ Contract Deployment Failed: {e}")
+else:
+    print("❌ Failed to connect to Blockchain (Is Ganache Open?)")
+
+
+# ============================================
+# ROUTES (PAGES)
 # ============================================
 
 @app.route('/')
 def home():
-    cursor = mysql.connection.cursor()
-    cursor.execute('SELECT COUNT(*) FROM Users')
-    user_count = cursor.fetchone()[0]
-    cursor.close()
-    return render_template('index.html', count=user_count)
+    # Check SQL Connection
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute('SELECT COUNT(*) FROM Users')
+        user_count = cursor.fetchone()[0]
+        cursor.close()
+        return render_template('index.html', count=user_count)
+    except Exception as e:
+        return f"<h1>Database Error</h1><p>Please ensure XAMPP MySQL is running.</p><p>Error: {e}</p>"
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         name = request.form['company_name']
         email = request.form['email']
-        password = request.form['password'] 
+        password = request.form['password']
         role = request.form['role']
         location = request.form['location']
 
@@ -47,7 +93,7 @@ def register():
         ''', (name, email, password, role, location))
         mysql.connection.commit()
         cursor.close()
-        return redirect(url_for('login')) # Redirect to Login after registering
+        return redirect(url_for('login'))
 
     return render_template('register.html')
 
@@ -59,17 +105,15 @@ def login():
         password = request.form['password']
 
         cursor = mysql.connection.cursor()
-        # Check if user exists
         cursor.execute('SELECT * FROM Users WHERE email = %s AND password_hash = %s', (email, password))
         user = cursor.fetchone()
         cursor.close()
 
         if user:
-            # Create Session Data (This "logs them in")
             session['loggedin'] = True
-            session['id'] = user[0]       # The User ID
-            session['name'] = user[1]     # The Company Name
-            session['role'] = user[4]     # The Role (Producer/Recycler)
+            session['id'] = user[0]
+            session['name'] = user[1]
+            session['role'] = user[4]
             return redirect(url_for('dashboard'))
         else:
             error = 'Invalid email or password!'
@@ -78,7 +122,6 @@ def login():
 
 @app.route('/dashboard')
 def dashboard():
-    # Check if user is logged in
     if 'loggedin' in session:
         return render_template('dashboard.html')
     return redirect(url_for('login'))
@@ -91,10 +134,8 @@ def logout():
     session.pop('role', None)
     return redirect(url_for('login'))
 
-# Route for Producers to Post Waste
 @app.route('/post_material', methods=['GET', 'POST'])
 def post_material():
-    # Security Check: Must be logged in
     if 'loggedin' not in session:
         return redirect(url_for('login'))
 
@@ -103,28 +144,25 @@ def post_material():
         category = request.form['category']
         quantity = request.form['quantity']
         price = request.form['price']
-        owner_id = session['id']  # <--- IMPORTANT: We get this from the session!
+        owner_id = session['id']
 
         cursor = mysql.connection.cursor()
         cursor.execute('''
             INSERT INTO Materials (owner_id, material_name, category, quantity_kg, price_per_kg)
             VALUES (%s, %s, %s, %s, %s)
         ''', (owner_id, name, category, quantity, price))
-        
         mysql.connection.commit()
         cursor.close()
         return redirect(url_for('dashboard'))
 
     return render_template('post_material.html')
 
-# Route for Marketplace
 @app.route('/market')
 def market():
     if 'loggedin' not in session:
         return redirect(url_for('login'))
 
     cursor = mysql.connection.cursor()
-    # SQL JOIN to get the Company Name of the seller
     cursor.execute('''
         SELECT Materials.*, Users.company_name 
         FROM Materials 
@@ -133,9 +171,11 @@ def market():
     ''')
     data = cursor.fetchall()
     cursor.close()
-    
     return render_template('market.html', materials=data)
 
+# ============================================
+# THE CORE HYBRID & BLOCKCHAIN LOGIC
+# ============================================
 @app.route('/buy/<int:id>')
 def buy_material(id):
     if 'loggedin' not in session:
@@ -143,12 +183,14 @@ def buy_material(id):
 
     buyer_id = session['id']
     
-    # 1. FETCH MATERIAL DETAILS (SQL)
+    # 1. FETCH DETAILS
     cursor = mysql.connection.cursor()
     cursor.execute('SELECT * FROM Materials WHERE material_id = %s', (id,))
     material = cursor.fetchone()
     
-    # material structure: [id, owner_id, name, category, qty, price, status, date]
+    if not material:
+        return "Material not found or already sold."
+
     seller_id = material[1]
     material_name = material[2]
     category = material[3]
@@ -156,52 +198,80 @@ def buy_material(id):
     price = float(material[5])
     total_cost = quantity * price
 
-    # 2. RECORD TRANSACTION & UPDATE STATUS (SQL)
-    # Insert into Transactions table
+    # 2. SQL: INSERT TRANSACTION
     cursor.execute('''
         INSERT INTO Transactions (buyer_id, seller_id, material_id, total_amount)
         VALUES (%s, %s, %s, %s)
     ''', (buyer_id, seller_id, id, total_cost))
-
+    
+    # Capture the ID immediately
     transaction_id = cursor.lastrowid
-    # Mark material as 'Sold' so it disappears from the market
-    cursor.execute('UPDATE Materials SET status = "Sold" WHERE material_id = %s', (id,))
-    
-    # Get the Transaction ID we just created (Need this for linking!)
-    
-    
-    mysql.connection.commit()
-    cursor.close()
 
-    # 3. GENERATE IMPACT REPORT (NoSQL - MongoDB)
-    # Different materials save different amounts of CO2.
-    # Logic: If 1kg of Fly Ash is recycled, we save approx 0.8kg CO2.
+    # 3. SQL: UPDATE STATUS
+    cursor.execute('UPDATE Materials SET status = "Sold" WHERE material_id = %s', (id,))
+    mysql.connection.commit() # Save SQL changes first
+
+    # 4. NOSQL: GENERATE IMPACT REPORT (MongoDB)
     co2_factor = 0.5 
     if category == 'Industrial': co2_factor = 0.8
     if category == 'Metal': co2_factor = 1.5
-    if category == 'Textile': co2_factor = 0.3
-
-    saved_carbon = quantity * co2_factor
-    saved_energy = quantity * 0.2 # Dummy energy metric
-
-    # Create the JSON Document
+    
     impact_report = {
-        "transaction_id": transaction_id,  # LINKING SQL ID TO NOSQL DOC
+        "transaction_id": transaction_id,
         "material_type": category,
         "quantity_recycled": quantity,
         "sustainability_metrics": {
-            "carbon_emissions_prevented_kg": saved_carbon,
-            "landfill_space_saved_m3": quantity * 0.01,
-            "energy_conserved_kwh": saved_energy
+            "carbon_emissions_prevented_kg": quantity * co2_factor,
+            "energy_conserved_kwh": quantity * 0.2
         },
         "generated_at": datetime.datetime.now()
     }
-
-    # Insert into MongoDB
     impact_collection.insert_one(impact_report)
 
-    # 4. DONE! Redirect to Dashboard
+    # 5. BLOCKCHAIN: SMART CONTRACT CALL (Ganache)
+    try:
+        # Get Company Names for the Blockchain
+        cursor.execute('SELECT company_name FROM Users WHERE user_id = %s', (buyer_id,))
+        buyer_name = cursor.fetchone()[0]
+        cursor.execute('SELECT company_name FROM Users WHERE user_id = %s', (seller_id,))
+        seller_name = cursor.fetchone()[0]
+
+        # Send to Ganache
+        if deployed_contract:
+            tx_hash = deployed_contract.functions.addTransaction(
+                str(buyer_name),
+                str(seller_name),
+                str(material_name),
+                int(total_cost)
+            ).transact({
+                'from': web3.eth.accounts[0], 
+                'gas': 3000000
+            })
+            
+            receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+            ganache_hash = receipt.transactionHash.hex()
+            print(f"⛓️ Block Mined! Hash: {ganache_hash}")
+
+            # Store the REAL Blockchain Hash in SQL
+            cursor.execute('''
+                INSERT INTO Blockchain_Ledger (transaction_id, prev_hash, curr_hash)
+                VALUES (%s, %s, %s)
+            ''', (transaction_id, 'GENESIS', ganache_hash))
+            mysql.connection.commit()
+
+    except Exception as e:
+        print(f"⚠️ Blockchain Error: {e}")
+
+    cursor.close()
     return redirect(url_for('dashboard'))
+
+@app.route('/ledger')
+def ledger():
+    cursor = mysql.connection.cursor()
+    cursor.execute('SELECT * FROM Blockchain_Ledger')
+    data = cursor.fetchall()
+    cursor.close()
+    return render_template('ledger.html', blocks=data)
 
 if __name__ == '__main__':
     app.run(debug=True)
