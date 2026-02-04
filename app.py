@@ -4,6 +4,8 @@ from pymongo import MongoClient
 from web3 import Web3
 import datetime
 import json
+from fpdf import FPDF
+import os
 
 # Import the Smart Contract setup
 from blockchain_config import contract_abi, contract_bytecode
@@ -121,9 +123,20 @@ def login():
     return render_template('login.html', error=error)
 
 @app.route('/dashboard')
+@app.route('/dashboard')
 def dashboard():
     if 'loggedin' in session:
-        return render_template('dashboard.html')
+        # 1. MongoDB Aggregation: Sum quantity by Material Type
+        pipeline = [
+            {"$group": {"_id": "$material_type", "total_qty": {"$sum": "$quantity_recycled"}}}
+        ]
+        results = list(impact_collection.aggregate(pipeline))
+        
+        # Format data for the Chart
+        labels = [row['_id'] for row in results]
+        values = [row['total_qty'] for row in results]
+        
+        return render_template('dashboard.html', labels=labels, values=values)
     return redirect(url_for('login'))
 
 @app.route('/logout')
@@ -272,6 +285,49 @@ def ledger():
     data = cursor.fetchall()
     cursor.close()
     return render_template('ledger.html', blocks=data)
+
+
+@app.route('/download_certificate/<int:tx_id>')
+def download_certificate(tx_id):
+    if 'loggedin' not in session: return redirect(url_for('login'))
+
+    # Fetch details from SQL
+    cursor = mysql.connection.cursor()
+    cursor.execute('''
+        SELECT t.transaction_date, b.company_name, s.company_name, m.material_name, m.quantity_kg, bl.curr_hash
+        FROM Transactions t
+        JOIN Users b ON t.buyer_id = b.user_id
+        JOIN Users s ON t.seller_id = s.user_id
+        JOIN Materials m ON t.material_id = m.material_id
+        JOIN Blockchain_Ledger bl ON t.transaction_id = bl.transaction_id
+        WHERE t.transaction_id = %s
+    ''', (tx_id,))
+    data = cursor.fetchone()
+    
+    if not data: return "Transaction not found"
+
+    # Create PDF
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 24)
+    pdf.cell(200, 20, "Green Circularity Certificate", ln=True, align='C')
+    
+    pdf.set_font("Arial", size=12)
+    pdf.ln(20)
+    pdf.cell(200, 10, f"Date: {data[0]}", ln=True)
+    pdf.cell(200, 10, f"Issued To: {data[1]}", ln=True)
+    pdf.cell(200, 10, f"Sourced From: {data[2]}", ln=True)
+    pdf.ln(10)
+    pdf.cell(200, 10, f"This certifies the recycling of {data[4]}kg of {data[3]}.", ln=True)
+    pdf.ln(10)
+    pdf.set_font("Courier", size=8)
+    pdf.multi_cell(0, 10, f"Blockchain Proof: {data[5]}")
+    
+    # Save and Serve
+    filename = f"static/Certificate_{tx_id}.pdf"
+    pdf.output(filename)
+    
+    return redirect(url_for('static', filename=f'Certificate_{tx_id}.pdf'))
 
 if __name__ == '__main__':
     app.run(debug=True)

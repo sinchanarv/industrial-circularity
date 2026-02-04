@@ -1,34 +1,170 @@
 {% extends 'layout.html' %}
 
 {% block body %}
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>Welcome, {{ session['name'] }}!</h1>
-        <span class="badge bg-secondary fs-6">{{ session['role'] }}</span>
+<div class="container-fluid">
+    <!-- 1. HEADER SECTION -->
+    <div class="d-flex justify-content-between align-items-center mb-4 p-3 bg-light rounded shadow-sm">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">Welcome, {{ session['name'] }}!</h1>
+            <small class="text-muted">User ID: {{ session['id'] }} | Role: <strong>{{ session['role'] }}</strong></small>
+        </div>
+        <a href="/logout" class="btn btn-danger btn-sm">Logout</a>
     </div>
 
-    <!-- Logic: If User is a PRODUCER, show the form to Add Waste -->
-    {% if session['role'] == 'Producer' %}
-    <div class="card border-primary mb-4">
-        <div class="card-header bg-primary text-white">➕ Post Industrial Waste</div>
-        <div class="card-body">
-            <p>Have by-products? List them here for recyclers.</p>
-            <a href="/post_material" class="btn btn-primary">Post New Material</a>
+    <!-- 2. MAIN ACTION CARDS (Role Based) -->
+    <div class="row mb-4">
+        <!-- Logic: If User is a PRODUCER -->
+        {% if session['role'] == 'Producer' %}
+        <div class="col-md-12">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Action Required</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">List New Industrial By-Product</div>
+                    </div>
+                    <a href="/post_material" class="btn btn-primary">➕ Post Material</a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Logic: If User is a RECYCLER -->
+        {% if session['role'] == 'Recycler' %}
+        <div class="col-md-12">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Market Access</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">Browse Available Waste Materials</div>
+                    </div>
+                    <a href="/market" class="btn btn-success">🛒 View Marketplace</a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 3. ANALYTICS & HISTORY SECTION -->
+    <div class="row">
+        
+        <!-- Feature 2: Transaction History & Certificates (Left Side) -->
+        <div class="col-lg-8 mb-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">📜 Your Transaction History</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Material</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if history %}
+                                    {% for tx in history %}
+                                    <tr>
+                                        <td>{{ tx['date'] }}</td>
+                                        <td>{{ tx['material'] }} ({{ tx['qty'] }}kg)</td>
+                                        <td>
+                                            {% if tx['type'] == 'Bought' %}
+                                                <span class="badge bg-success">Buyer</span>
+                                            {% else %}
+                                                <span class="badge bg-info">Seller</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>Completed</td>
+                                        <td>
+                                            <!-- THE CERTIFICATE BUTTON -->
+                                            <a href="/download_certificate/{{ tx['id'] }}" class="btn btn-outline-warning btn-sm">
+                                                📄 Get Certificate
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted">No transactions found yet.</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Feature 1: Sustainability Chart (Right Side) -->
+        <div class="col-lg-4 mb-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-success">📊 Sustainability Impact</h6>
+                </div>
+                <div class="card-body">
+                    {% if labels %}
+                        <!-- FIX: Added a wrapper with fixed height to stop the chart from stretching -->
+                        <div class="chart-container" style="position: relative; height: 300px; width: 100%;">
+                            <canvas id="impactChart"></canvas>
+                        </div>
+                        
+                        <div class="mt-4 text-center small">
+                            <span class="mr-2">
+                                <i class="fas fa-circle text-success"></i> Breakdown of waste types exchanged
+                            </span>
+                        </div>
+                    {% else %}
+                        <p class="text-center text-muted">No analytics data available yet.</p>
+                    {% endif %}
+                </div>
+            </div>
         </div>
     </div>
-    {% endif %}
-
-    <!-- Logic: If User is a RECYCLER, show the Market -->
-    {% if session['role'] == 'Recycler' %}
-    <div class="card border-success mb-4">
-        <div class="card-header bg-success text-white">🛒 Material Marketplace</div>
-        <div class="card-body">
-            <p>Browse available waste materials for your industry.</p>
-            <a href="/market" class="btn btn-success">View Marketplace</a>
-        </div>
-    </div>
-    {% endif %}
-
-    <a href="/logout" class="btn btn-danger mt-3">Logout</a>
 </div>
+
+<!-- CHARTS.JS SCRIPT -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Safe check: Only run chart if we have data labels
+    var chartLabels = JSON.parse('{{ labels | tojson | safe }}');
+    var chartValues = JSON.parse('{{ values | tojson | safe }}');
+
+    if (chartLabels.length > 0) {
+        var ctx = document.getElementById('impactChart').getContext('2d');
+        var myPieChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: chartLabels,
+                datasets: [{
+                    data: chartValues,
+                    backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b'],
+                    hoverBackgroundColor: ['#2e59d9', '#17a673', '#2c9faf', '#dda20a', '#be2617'],
+                    hoverBorderColor: "rgba(234, 236, 244, 1)",
+                }],
+            },
+            options: {
+                maintainAspectRatio: false,
+                tooltips: {
+                    backgroundColor: "rgb(255,255,255)",
+                    bodyFontColor: "#858796",
+                    borderColor: '#dddfeb',
+                    borderWidth: 1,
+                    xPadding: 15,
+                    yPadding: 15,
+                    displayColors: false,
+                    caretPadding: 10,
+                },
+                legend: {
+                    display: true,
+                    position: 'bottom'
+                },
+            },
+        });
+    }
+</script>
+
 {% endblock %}
