@@ -1,31 +1,71 @@
 {% extends 'layout.html' %}
 
 {% block body %}
-<h2 class="mb-4">🛒 Material Marketplace</h2>
+<!-- 1. FILTER SECTION -->
+<div class="card mb-4 bg-light shadow-sm">
+    <div class="card-body">
+        <form action="/market" method="GET" class="row g-3 align-items-center">
+            <div class="col-auto">
+                <label class="col-form-label fw-bold">Filter by Category:</label>
+            </div>
+            <div class="col-auto">
+                <select name="category" class="form-select">
+                    <option value="">Show All</option>
+                    <option value="Industrial">Industrial Slag/Ash</option>
+                    <option value="Metal">Scrap Metal</option>
+                    <option value="Textile">Textile Waste</option>
+                    <option value="Plastic">Plastic</option>
+                    <option value="E-Waste">E-Waste</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary">Apply Filter</button>
+            </div>
+        </form>
+    </div>
+</div>
 
+<!-- 2. MARKETPLACE GRID -->
 <div class="row">
     {% for item in materials %}
     <div class="col-md-4 mb-4">
-        <div class="card h-100 shadow-sm border-success">
-            <div class="card-header bg-success text-white">
-                {{ item[3] }} <!-- Category -->
+        <div class="card h-100 shadow border-success">
+            
+            <!-- IMAGE SECTION (Corrected) -->
+            <!-- We use item[8] for the filename. If it fails, we show default.png -->
+            <img src="{{ url_for('static', filename='uploads/' + item[8]) }}" 
+                 class="card-img-top" 
+                 alt="Material Image" 
+                 style="height: 200px; object-fit: cover;"
+                 onerror="this.onerror=null;this.src='{{ url_for('static', filename='uploads/default.png') }}';">
+            
+            <div class="card-header bg-success text-white d-flex justify-content-between">
+                <span>{{ item[3] }}</span> <!-- Category -->
+                <small>ID: {{ item[0] }}</small>
             </div>
+            
             <div class="card-body">
-                <h5 class="card-title">{{ item[2] }}</h5> <!-- Material Name -->
+                <h5 class="card-title text-success">{{ item[2] }}</h5> <!-- Material Name -->
                 <p class="card-text">
                     <strong>Quantity:</strong> {{ item[4] }} kg<br>
                     <strong>Price:</strong> ₹{{ item[5] }} / kg<br>
-                    <strong>Seller:</strong> {{ item[8] }} <!-- Company Name -->
+                    <!-- Corrected Index for Seller Name: item[9] -->
+                    <strong>Seller:</strong> {{ item[9] }} 
                 </p>
-                <a href="/buy/{{ item[0] }}" class="btn btn-success w-100">Buy Now</a>            </div>
-            <div class="card-footer text-muted">
+                <a href="/buy/{{ item[0] }}" class="btn btn-success w-100">Buy Now</a>
+            </div>
+            
+            <div class="card-footer text-muted small">
                 Posted on {{ item[7] }}
             </div>
         </div>
     </div>
     {% else %}
     <div class="col-12">
-        <div class="alert alert-warning">No materials listed yet.</div>
+        <div class="alert alert-warning text-center">
+            <h4>No materials found.</h4>
+            <p>Try changing the filter or wait for producers to list items.</p>
+        </div>
     </div>
     {% endfor %}
 </div>

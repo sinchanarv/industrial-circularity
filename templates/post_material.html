@@ -8,7 +8,7 @@
                 <h4>➕ List New Industrial By-Product</h4>
             </div>
             <div class="card-body">
-                <form action="/post_material" method="POST">
+                <form action="/post_material" method="POST" enctype="multipart/form-data">
                     
                     <div class="mb-3">
                         <label class="form-label">Material Name</label>
@@ -39,6 +39,12 @@
 
                     <button type="submit" class="btn btn-primary w-100">List Material</button>
                     <a href="/dashboard" class="btn btn-secondary w-100 mt-2">Cancel</a>
+                
+                    <div class="mb-3">
+                        <label class="form-label">Upload Material Image</label>
+                        <input type="file" name="material_image" class="form-control" accept="image/*">
+                    </div>
+
                 </form>
             </div>
         </div>
